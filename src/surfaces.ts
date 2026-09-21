@@ -97,7 +97,7 @@ export function alphaFor(surface: Surface, gradient: boolean): number {
   return MIN_ALPHA + (1 - MIN_ALPHA) * depth;
 }
 
-export function withAlpha(hex: string, alpha: number): string {
+function withAlpha(hex: string, alpha: number): string {
   if (!/^#[0-9a-fA-F]{6}$/.test(hex)) {
     return hex;
   }
@@ -115,7 +115,7 @@ export function withAlpha(hex: string, alpha: number): string {
  * theme's own foreground still contrasts correctly — on light and dark alike.
  * Overriding it there is how you get dark-on-dark text.
  */
-export function shouldSetForeground(alpha: number): boolean {
+function shouldSetForeground(alpha: number): boolean {
   return alpha >= 0.75;
 }
 

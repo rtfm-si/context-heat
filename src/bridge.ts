@@ -34,14 +34,10 @@ export interface HeatReading {
   liveness: Liveness;
 }
 
-export function defaultBridgeDirectory(): string {
-  return path.join(os.homedir(), '.claude', 'context-heat');
-}
-
 export function resolveBridgeDirectory(configured: string): string {
   const trimmed = (configured ?? '').trim();
   if (!trimmed) {
-    return defaultBridgeDirectory();
+    return path.join(os.homedir(), '.claude', 'context-heat');
   }
   if (trimmed.startsWith('~')) {
     return path.join(os.homedir(), trimmed.slice(1));
@@ -179,7 +175,7 @@ const BLIND_FALLBACK_SECONDS = 24 * 60 * 60;
 
 export function readAll(
   dir: string,
-  staleAfterSeconds: number,
+  forgetEndedAfterSeconds: number,
   liveSessions?: LiveSessions
 ): HeatReading[] {
   let names: string[];
@@ -190,8 +186,8 @@ export function readAll(
   }
 
   const live = liveSessions ?? { available: false, ids: new Set<string>() };
-  const endedCutoff = Date.now() - Math.max(0, staleAfterSeconds) * 1000;
-  const blindCutoff = Date.now() - Math.max(staleAfterSeconds, BLIND_FALLBACK_SECONDS) * 1000;
+  const endedCutoff = Date.now() - Math.max(0, forgetEndedAfterSeconds) * 1000;
+  const blindCutoff = Date.now() - Math.max(forgetEndedAfterSeconds, BLIND_FALLBACK_SECONDS) * 1000;
 
   const out: HeatReading[] = [];
   for (const name of names) {

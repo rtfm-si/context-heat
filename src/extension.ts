@@ -11,6 +11,8 @@ import {
 import { FocusCache, refresh as refreshFocus } from './focus';
 import { BridgeStatus, inspectBridge, installBridge } from './install';
 import {
+  applyContextBasis,
+  ContextBasis,
   formatResetIn,
   HeatSource,
   METRIC_KEYS,
@@ -40,9 +42,11 @@ interface Settings {
   showPercentage: boolean;
   hideWhenCold: boolean;
   bridgeDirectory: string;
-  staleAfterSeconds: number;
+  forgetEndedAfterSeconds: number;
   show: MetricKey[];
   heatFrom: HeatSource;
+  contextBasis: ContextBasis;
+  compactAtPercent: number;
   pruneAfterDays: number;
   focusRecentFraction: number;
   checkBridge: boolean;
@@ -77,9 +81,11 @@ function readSettings(): Settings {
     showPercentage: c.get<boolean>('showPercentage', true),
     hideWhenCold: c.get<boolean>('hideWhenCold', false),
     bridgeDirectory: resolveBridgeDirectory(c.get<string>('bridgeDirectory', '')),
-    staleAfterSeconds: c.get<number>('staleAfterSeconds', 900),
+    forgetEndedAfterSeconds: c.get<number>('forgetEndedAfterSeconds', 900),
     show: normalizeShow(c.get('show', ['context', 'weekly', 'focus'])),
     heatFrom: c.get<HeatSource>('heatFrom', 'context'),
+    contextBasis: c.get<ContextBasis>('contextBasis', 'window'),
+    compactAtPercent: c.get<number>('compactAtPercent', 80),
     pruneAfterDays: c.get<number>('pruneAfterDays', 7),
     focusRecentFraction: c.get<number>('focusRecentFraction', 0.2),
     checkBridge: c.get<boolean>('checkBridge', true),
@@ -231,33 +237,22 @@ export function activate(context: vscode.ExtensionContext) {
     }
   }
 
-  function currentMetrics(): Metric[] {
-    const metrics = metricsFor(reading, settings.show, focusCache?.focus ?? null);
+  /**
+   * `keys` is what to include: the displayed subset for rendering, or every
+   * metric for deciding the temperature — heat can follow a number the status
+   * bar is not showing.
+   */
+  function metricsOf(keys: MetricKey[]): Metric[] {
+    const metrics = applyContextBasis(
+      metricsFor(reading, keys, focusCache?.focus ?? null),
+      settings.contextBasis,
+      settings.compactAtPercent
+    );
     if (simulated === null) {
       return metrics;
     }
     // While simulating, the context number is the dial being turned; the rate
     // limits are still real, so leave them alone.
-    return metrics.map((m) => (m.key === 'context' ? { ...m, percentage: simulated! } : m));
-  }
-
-  /** The context number on its own, before `heatFrom` gets a say. */
-  function contextPercentage(): number | null {
-    if (simulated !== null) {
-      return simulated;
-    }
-    return reading ? reading.usedPercentage : null;
-  }
-
-  /**
-   * Every metric, displayed or not. The temperature can follow a number the
-   * status bar is not showing, and the tooltip lists them all regardless.
-   */
-  function allMetrics(): Metric[] {
-    const metrics = metricsFor(reading, METRIC_KEYS, focusCache?.focus ?? null);
-    if (simulated === null) {
-      return metrics;
-    }
     return metrics.map((m) => (m.key === 'context' ? { ...m, percentage: simulated! } : m));
   }
 
@@ -269,7 +264,9 @@ export function activate(context: vscode.ExtensionContext) {
     if (simulated !== null) {
       return simulated;
     }
-    return heatPercentage(allMetrics(), settings.heatFrom, contextPercentage());
+    const all = metricsOf(METRIC_KEYS);
+    const context = all.find((m) => m.key === 'context');
+    return heatPercentage(all, settings.heatFrom, context ? context.percentage : null);
   }
 
   /**
@@ -320,7 +317,7 @@ export function activate(context: vscode.ExtensionContext) {
     const band = currentBand;
     const frames = settings.animate ? band.frames : band.frames.slice(0, 1);
     const glyph = frames[frame % frames.length];
-    const metrics = currentMetrics();
+    const metrics = metricsOf(settings.show);
 
     setText(formatStatusText(glyph, metrics, settings.showPercentage, band.suffix));
     setTooltip(
@@ -351,7 +348,7 @@ export function activate(context: vscode.ExtensionContext) {
   async function tick() {
     const pctBefore = effectivePercentage();
     if (simulated === null) {
-      const all = readAll(settings.bridgeDirectory, settings.staleAfterSeconds, readLiveSessions());
+      const all = readAll(settings.bridgeDirectory, settings.forgetEndedAfterSeconds, readLiveSessions());
       reading = selectForWorkspace(all, workspacePaths());
     }
     refreshFocusIfDue();
@@ -505,7 +502,7 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand('contextHeat.installBridge', () => checkBridge(true)),
     vscode.commands.registerCommand('contextHeat.showStatus', () => {
-      const all = readAll(settings.bridgeDirectory, settings.staleAfterSeconds, readLiveSessions());
+      const all = readAll(settings.bridgeDirectory, settings.forgetEndedAfterSeconds, readLiveSessions());
       output.appendLine('');
       output.appendLine(`Bridge dir: ${settings.bridgeDirectory}`);
       output.appendLine(`Workspace:  ${workspacePaths().join(', ') || '(none)'}`);

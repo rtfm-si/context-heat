@@ -2,7 +2,7 @@
   "name": "context-heat",
   "displayName": "Context Heat",
   "description": "Your editor gets hot as your Claude Code context window fills up.",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "rtfm-si",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -63,188 +63,299 @@
         "title": "Context Heat: Install or Update Statusline Bridge"
       }
     ],
-    "configuration": {
-      "title": "Context Heat",
-      "properties": {
-        "contextHeat.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Heat the UI as the Claude Code context window fills."
-        },
-        "contextHeat.show": {
-          "type": "array",
-          "default": [
-            "context",
-            "weekly",
-            "focus"
-          ],
-          "items": {
+    "configuration": [
+      {
+        "title": "Context Heat",
+        "order": 0,
+        "properties": {
+          "contextHeat.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Heat the UI as the Claude Code context window fills.",
+            "order": 0
+          },
+          "contextHeat.show": {
+            "type": "array",
+            "default": [
+              "context",
+              "weekly",
+              "focus"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "context",
+                "fiveHour",
+                "weekly",
+                "focus"
+              ],
+              "enumDescriptions": [
+                "Context window used.",
+                "5-hour rate limit used.",
+                "Weekly rate limit used.",
+                "Share of conversation tokens touching files you are still working on."
+              ]
+            },
+            "uniqueItems": true,
+            "markdownDescription": "Which numbers appear in the status bar. With just `context` it reads `\ud83d\udd25\ud83d\udd25 74%`; add more and they get labelled: `\ud83d\udd25\ud83d\udd25 ctx 74% \u00b7 5h 34% \u00b7 7d 77% \u00b7 fcs 58%`.\n\n`focus` is a share of the **conversation**, not of the context window \u2014 they are not parts of one whole.\n\nThe tooltip always shows everything available.",
+            "order": 1
+          },
+          "contextHeat.showPercentage": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show the numeric percentage next to the flames.",
+            "order": 2
+          },
+          "contextHeat.animate": {
+            "type": "boolean",
+            "default": true,
+            "description": "Flicker the status bar flames in the hottest bands.",
+            "order": 3
+          },
+          "contextHeat.hideWhenCold": {
+            "type": "boolean",
+            "default": false,
+            "description": "Hide the status bar item entirely below the first threshold.",
+            "order": 4
+          }
+        }
+      },
+      {
+        "title": "Temperature",
+        "order": 1,
+        "properties": {
+          "contextHeat.heatFrom": {
             "type": "string",
             "enum": [
               "context",
               "fiveHour",
               "weekly",
-              "focus"
+              "hottest"
             ],
+            "default": "context",
             "enumDescriptions": [
-              "Context window used.",
-              "5-hour rate limit used.",
-              "Weekly rate limit used.",
-              "Share of conversation tokens touching files you are still working on."
-            ]
+              "Follow the context window.",
+              "Follow the 5-hour session limit.",
+              "Follow the weekly limit.",
+              "Follow whichever of the three is highest."
+            ],
+            "markdownDescription": "Which number drives the colour and flames.\n\nThis is independent of `#contextHeat.show#` \u2014 the temperature can follow a number the status bar is not displaying. If Claude Code does not report the chosen limit, it falls back to the context window rather than going cold.",
+            "order": 0
           },
-          "uniqueItems": true,
-          "markdownDescription": "Which numbers appear in the status bar. With just `context` it reads `\ud83d\udd25\ud83d\udd25 74%`; add more and they get labelled: `\ud83d\udd25\ud83d\udd25 ctx 74% \u00b7 5h 34% \u00b7 7d 77% \u00b7 fcs 58%`.\n\n`focus` is a share of the **conversation**, not of the context window \u2014 they are not parts of one whole.\n\nThe tooltip always shows everything available."
-        },
-        "contextHeat.heatFrom": {
-          "type": "string",
-          "enum": [
-            "context",
-            "fiveHour",
-            "weekly",
-            "hottest"
-          ],
-          "default": "context",
-          "enumDescriptions": [
-            "Follow the context window.",
-            "Follow the 5-hour session limit.",
-            "Follow the weekly limit.",
-            "Follow whichever of the three is highest."
-          ],
-          "markdownDescription": "Which number drives the colour and flames.\n\nThis is independent of `#contextHeat.show#` \u2014 the temperature can follow a number the status bar is not displaying. If Claude Code does not report the chosen limit, it falls back to the context window rather than going cold."
-        },
-        "contextHeat.colorScope": {
-          "type": "string",
-          "enum": [
-            "workspace",
-            "global",
-            "off"
-          ],
-          "default": "workspace",
-          "enumDescriptions": [
-            "Write colors to this folder's .vscode/settings.json. Each window heats independently.",
-            "Write colors to your user settings. Every window heats together.",
-            "Never write colors. Status bar indicator only."
-          ],
-          "description": "Where to write workbench.colorCustomizations."
-        },
-        "contextHeat.gradient": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "Ramp the tint down the window: faint at the title bar, full strength at the status bar. VS Code has no real gradient, so this uses alpha per surface, which composites over your theme and works in light and dark.\n\nTurn off for a flat tint on every surface."
-        },
-        "contextHeat.surfaces": {
-          "type": "array",
-          "default": [
-            "titleBar",
-            "activityBar",
-            "statusBar",
-            "windowBorder"
-          ],
-          "items": {
+          "contextHeat.contextBasis": {
             "type": "string",
             "enum": [
+              "window",
+              "untilCompact"
+            ],
+            "default": "window",
+            "enumDescriptions": [
+              "Share of the whole context window. This is the number Claude Code itself reports.",
+              "Share of the context you get before auto-compact fires. Reaches 100% when you are about to be compacted."
+            ],
+            "markdownDescription": "What the context percentage is measured against.\n\nThis is why Context Heat and ccstatusline can disagree: ccstatusline divides by a usable window, so 32% of a 1M window reads as 40% there. Neither is wrong \u2014 they answer different questions. Use `untilCompact` to match it.",
+            "order": 1
+          },
+          "contextHeat.compactAtPercent": {
+            "type": "number",
+            "default": 80,
+            "minimum": 1,
+            "maximum": 100,
+            "markdownDescription": "What percentage of the window auto-compact fires at. Only used when `#contextHeat.contextBasis#` is `untilCompact`.",
+            "order": 2
+          },
+          "contextHeat.thresholds": {
+            "type": "object",
+            "default": {
+              "warm": 25,
+              "toasty": 45,
+              "hot": 60,
+              "blazing": 70,
+              "critical": 80,
+              "meltdown": 98
+            },
+            "markdownDescription": "Context percentage at which each band begins.\n\n`blazing` is \"on fire\" \u2014 the normal maximum heat. `critical` and `meltdown` escalate above it.\n\nSetting one value moves the defaults below it out of the way, so `{ \"blazing\": 55 }` alone works.",
+            "properties": {
+              "warm": {
+                "type": "number",
+                "description": "Faint amber."
+              },
+              "toasty": {
+                "type": "number",
+                "description": "Orange."
+              },
+              "hot": {
+                "type": "number",
+                "description": "Strong orange, starts flickering."
+              },
+              "blazing": {
+                "type": "number",
+                "description": "On fire. The normal maximum."
+              },
+              "critical": {
+                "type": "number",
+                "description": "Past maximum. Faster, harsher, shouts COMPACT."
+              },
+              "meltdown": {
+                "type": "number",
+                "description": "End of the scale."
+              }
+            },
+            "additionalProperties": false,
+            "order": 3
+          }
+        }
+      },
+      {
+        "title": "Colours",
+        "order": 2,
+        "properties": {
+          "contextHeat.colorScope": {
+            "type": "string",
+            "enum": [
+              "workspace",
+              "global",
+              "off"
+            ],
+            "default": "workspace",
+            "enumDescriptions": [
+              "Write colors to this folder's .vscode/settings.json. Each window heats independently.",
+              "Write colors to your user settings. Every window heats together.",
+              "Never write colors. Status bar indicator only."
+            ],
+            "description": "Where to write workbench.colorCustomizations.",
+            "order": 0
+          },
+          "contextHeat.gradient": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Ramp the tint down the window: faint at the title bar, full strength at the status bar. VS Code has no real gradient, so this uses alpha per surface, which composites over your theme and works in light and dark.\n\nTurn off for a flat tint on every surface.",
+            "order": 1
+          },
+          "contextHeat.surfaces": {
+            "type": "array",
+            "default": [
               "titleBar",
-              "tabs",
-              "sideBar",
               "activityBar",
-              "panel",
               "statusBar",
               "windowBorder"
-            ]
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "titleBar",
+                "tabs",
+                "sideBar",
+                "activityBar",
+                "panel",
+                "statusBar",
+                "windowBorder"
+              ]
+            },
+            "uniqueItems": true,
+            "markdownDescription": "Which chrome surfaces heat up, listed top to bottom. Enable more of them for a smoother gradient.\n\n`windowBorder` needs `window.titleBarStyle` set to `custom`.",
+            "order": 2
+          }
+        }
+      },
+      {
+        "title": "Focus",
+        "order": 3,
+        "properties": {
+          "contextHeat.focusRecentFraction": {
+            "type": "number",
+            "default": 0.2,
+            "minimum": 0.05,
+            "maximum": 1,
+            "description": "What counts as \"now\" for focus: the fraction of the conversation, from the end, whose files define your current working set.",
+            "order": 0
+          }
+        }
+      },
+      {
+        "title": "Bridge and sessions",
+        "order": 4,
+        "properties": {
+          "contextHeat.checkBridge": {
+            "type": "boolean",
+            "default": true,
+            "description": "On startup, check whether the statusline bridge is installed and up to date, and offer to fix it.",
+            "order": 0
           },
-          "uniqueItems": true,
-          "markdownDescription": "Which chrome surfaces heat up, listed top to bottom. Enable more of them for a smoother gradient.\n\n`windowBorder` needs `window.titleBarStyle` set to `custom`."
-        },
-        "contextHeat.thresholds": {
-          "type": "object",
-          "default": {
-            "warm": 25,
-            "toasty": 45,
-            "hot": 60,
-            "blazing": 70,
-            "critical": 80,
-            "meltdown": 98
+          "contextHeat.bridgeDirectory": {
+            "type": "string",
+            "default": "",
+            "description": "Directory the statusline bridge writes to. Defaults to ~/.claude/context-heat.",
+            "order": 1
           },
-          "markdownDescription": "Context percentage at which each band begins.\n\n`blazing` is \"on fire\" \u2014 the normal maximum heat. `critical` and `meltdown` escalate above it.\n\nSetting one value moves the defaults below it out of the way, so `{ \"blazing\": 55 }` alone works.",
-          "properties": {
-            "warm": {
-              "type": "number",
-              "description": "Faint amber."
-            },
-            "toasty": {
-              "type": "number",
-              "description": "Orange."
-            },
-            "hot": {
-              "type": "number",
-              "description": "Strong orange, starts flickering."
-            },
-            "blazing": {
-              "type": "number",
-              "description": "On fire. The normal maximum."
-            },
-            "critical": {
-              "type": "number",
-              "description": "Past maximum. Faster, harsher, shouts COMPACT."
-            },
-            "meltdown": {
-              "type": "number",
-              "description": "End of the scale."
-            }
+          "contextHeat.forgetEndedAfterSeconds": {
+            "type": "number",
+            "default": 900,
+            "description": "How long to keep showing a session's last reading after its process has exited. Running sessions are never forgotten, however long they sit idle.",
+            "order": 2
           },
-          "additionalProperties": false
-        },
-        "contextHeat.animate": {
-          "type": "boolean",
-          "default": true,
-          "description": "Flicker the status bar flames in the hottest bands."
-        },
-        "contextHeat.showPercentage": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show the numeric percentage next to the flames."
-        },
-        "contextHeat.hideWhenCold": {
-          "type": "boolean",
-          "default": false,
-          "description": "Hide the status bar item entirely below the first threshold."
-        },
-        "contextHeat.focusRecentFraction": {
-          "type": "number",
-          "default": 0.2,
-          "minimum": 0.05,
-          "maximum": 1,
-          "description": "What counts as \"now\" for focus: the fraction of the conversation, from the end, whose files define your current working set."
-        },
-        "contextHeat.checkBridge": {
-          "type": "boolean",
-          "default": true,
-          "description": "On startup, check whether the statusline bridge is installed and up to date, and offer to fix it."
-        },
-        "contextHeat.bridgeDirectory": {
-          "type": "string",
-          "default": "",
-          "description": "Directory the statusline bridge writes to. Defaults to ~/.claude/context-heat."
-        },
-        "contextHeat.staleAfterSeconds": {
-          "type": "number",
-          "default": 900,
-          "description": "How long after a session ENDS to keep showing its last reading. Running sessions are never aged out, however long they sit idle."
-        },
-        "contextHeat.pruneAfterDays": {
-          "type": "number",
-          "default": 7,
-          "description": "Delete bridge files untouched for this many days, at startup."
+          "contextHeat.pruneAfterDays": {
+            "type": "number",
+            "default": 7,
+            "description": "Delete bridge files untouched for this many days, at startup.",
+            "order": 3
+          }
         }
       }
-    }
+    ],
+    "walkthroughs": [
+      {
+        "id": "contextHeat.setup",
+        "title": "Set up Context Heat",
+        "description": "Connect Context Heat to Claude Code and choose what it shows.",
+        "steps": [
+          {
+            "id": "install",
+            "title": "Install the bridge",
+            "description": "Put the bridge script in ~/.claude and point Claude Code at it.\n[Install the bridge](command:contextHeat.installBridge)",
+            "media": {
+              "markdown": "media/walkthrough/install.md"
+            },
+            "completionEvents": [
+              "onCommand:contextHeat.installBridge"
+            ]
+          },
+          {
+            "id": "restart",
+            "title": "Restart Claude Code",
+            "description": "Claude Code reads statusLine at startup, so restart it for the bridge to take effect.",
+            "media": {
+              "markdown": "media/walkthrough/restart.md"
+            }
+          },
+          {
+            "id": "see",
+            "title": "See it heat up",
+            "description": "You cannot reach 90% on demand, so turn the dial by hand.\n[Simulate a temperature](command:contextHeat.simulate)",
+            "media": {
+              "markdown": "media/walkthrough/see.md"
+            },
+            "completionEvents": [
+              "onCommand:contextHeat.simulate"
+            ]
+          },
+          {
+            "id": "choose",
+            "title": "Choose what it shows",
+            "description": "Pick which numbers appear, what drives the colour, and which parts of the editor tint.\n[Open settings](command:workbench.action.openSettings?%22contextHeat%22)",
+            "media": {
+              "markdown": "media/walkthrough/choose.md"
+            }
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "npm run compile && npx @vscode/vsce package",
-    "test": "npm run compile && node test/logic.test.js && node test/scope.test.js"
+    "test": "npm run compile && node test/logic.test.js && node test/scope.test.js && node test/install.test.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

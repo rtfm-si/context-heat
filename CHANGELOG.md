@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.4
+
+- Added a **Set up Context Heat** walkthrough, so installing the bridge and
+  choosing what to show no longer means reading the README first.
+- Settings are grouped into Temperature, Colours, Focus and Bridge sections
+  rather than one flat list of sixteen.
+- `contextBasis` can measure context against the auto-compact threshold instead
+  of the whole window, which is why this and ccstatusline disagreed: ccstatusline
+  divides by a usable window, so 32% of 1M reads as 40% there.
+- `staleAfterSeconds` renamed to `forgetEndedAfterSeconds`. The old name read as
+  "ignore sessions that have gone quiet", which was the wrong mental model and
+  the cause of the idle-session bug.
+- A session whose state cannot be determined reports as unknown rather than
+  claiming it has ended.
+- The bridge install flow is now covered by the test suite.
+
 ## 0.0.3
 
 - Idle sessions are no longer treated as finished. Liveness now comes from

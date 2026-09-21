@@ -10,7 +10,7 @@ export const METRIC_KEYS: MetricKey[] = ['context', 'fiveHour', 'weekly', 'focus
  * `focus` is the odd one out: 90% focus is excellent, and letting it drive the
  * temperature would set the window on fire for doing well.
  */
-export const HEAT_METRICS: MetricKey[] = ['context', 'fiveHour', 'weekly'];
+const HEAT_METRICS: MetricKey[] = ['context', 'fiveHour', 'weekly'];
 
 /** What the temperature follows. */
 export type HeatSource = 'context' | 'fiveHour' | 'weekly' | 'hottest';
@@ -30,7 +30,7 @@ const LABELS: Record<MetricKey, { short: string; long: string }> = {
   context: { short: 'ctx', long: 'Context window' },
   fiveHour: { short: '5h', long: '5-hour limit' },
   weekly: { short: '7d', long: 'Weekly limit' },
-  focus: { short: 'fcs', long: 'Working-set focus' },
+  focus: { short: 'focus', long: 'Working-set focus' },
 };
 
 /**
@@ -83,6 +83,34 @@ export function metricsFor(
  * than going cold. A window that quietly stopped reacting would read as the
  * extension being broken, which is worse than heating from the wrong number.
  */
+export type ContextBasis = 'window' | 'untilCompact';
+
+/**
+ * Rescale the context number against the point auto-compact fires.
+ *
+ * Claude reports context as a share of the whole window, and that is what
+ * `window` shows. But you are not interrupted at 100% — auto-compact fires
+ * earlier, so `untilCompact` measures against that instead and reaches 100%
+ * when you are actually about to be compacted.
+ *
+ * This is the whole reason Context Heat and ccstatusline disagree: ccstatusline
+ * divides by a usable window of 80%, so 31.7% of a 1M window reads as 39.6%
+ * there. Neither is wrong; they answer different questions.
+ */
+export function applyContextBasis(
+  metrics: Metric[],
+  basis: ContextBasis,
+  compactAtPercent: number
+): Metric[] {
+  if (basis === 'window') {
+    return metrics;
+  }
+  const ratio = Math.max(1, Math.min(100, compactAtPercent)) / 100;
+  return metrics.map((m) =>
+    m.key === 'context' ? { ...m, percentage: Math.min(100, m.percentage / ratio) } : m
+  );
+}
+
 export function heatPercentage(
   metrics: Metric[],
   heatFrom: HeatSource,
@@ -113,10 +141,7 @@ export function formatStatusText(
   showPercentage: boolean,
   suffix: string
 ): string {
-  if (metrics.length === 0) {
-    return `${glyph}${suffix}`;
-  }
-  if (!showPercentage) {
+  if (metrics.length === 0 || !showPercentage) {
     return `${glyph}${suffix}`;
   }
   if (metrics.length === 1 && metrics[0].key === 'context') {

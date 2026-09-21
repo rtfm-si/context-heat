@@ -28,7 +28,7 @@ export interface BridgeStatus {
   shippedHash: string;
 }
 
-export function claudeDir(home = os.homedir()): string {
+function claudeDir(home = os.homedir()): string {
   return path.join(home, '.claude');
 }
 

@@ -260,7 +260,7 @@ t('focus appears as a metric', withFocus.some(m => m.key === 'focus' && m.percen
 t('focus excluded from hottest', heatPercentage(withFocus, 'hottest', 74) === 74);
 t('focus omitted when unavailable', metricsFor(rFocus, ['context','focus'], null).length === 1);
 t('focus labelled in status text',
-  formatStatusText('🔥', withFocus, true, '') === '🔥 ctx 74% · fcs 95%');
+  formatStatusText('🔥', withFocus, true, '') === '🔥 ctx 74% · focus 95%');
 
 
 // ===== heat source =====

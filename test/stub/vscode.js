@@ -21,7 +21,6 @@ module.exports = {
   StatusBarAlignment:{Right:2},
   Uri:{ file:(p)=>({fsPath:p}),
         joinPath:(base,...parts)=>({fsPath:require('path').join(base.fsPath,...parts)}) },
-  showErrorMessage:async()=>undefined,
   ThemeColor: class { constructor(id){this.id=id;} },
   MarkdownString: class { constructor(){this.value='';} appendMarkdown(s){this.value+=s;return this;} },
   ConfigurationTarget:{Global:1,Workspace:2},

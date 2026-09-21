@@ -21,6 +21,31 @@ tops out there rather than saving the drama for 90%. `critical` and `meltdown`
 sit above it as real escalation: harsher colour, faster flicker, and a label
 that shouts. They should be rare, which is what makes them mean something.
 
+## Setup
+
+Install the extension and it offers to do the rest: **Set up Context Heat** in
+the Welcome page walks through installing the bridge, restarting Claude Code,
+and choosing what to show. Nothing to edit by hand.
+
+## Why this number differs from ccstatusline
+
+Both are right; they divide by different things.
+
+| | 316,588 tokens of a 1M window |
+| --- | --- |
+| Claude Code, and Context Heat | **32%** of the whole window |
+| ccstatusline | **40%** of the *usable* window (it reserves 20% for auto-compact) |
+
+You are not interrupted at 100% — auto-compact fires earlier — so "% of usable"
+answers *how close am I to being compacted*, while "% of window" answers *how
+full is it*. To match ccstatusline:
+
+```json
+"contextHeat.contextBasis": "untilCompact"
+```
+
+`contextHeat.compactAtPercent` (default `80`) sets where that threshold is.
+
 ## Showing more than context
 
 The same payload carries your rate limits, so the status bar can show all three:
@@ -131,7 +156,7 @@ Claude Code keeps a registry at `~/.claude/sessions/<pid>.json` pairing each
 session id with the process serving it, so the extension asks the OS whether
 that process is still running. **A running session is never aged out, however
 long it has been idle.** Only one whose process has gone gets dropped, and
-`staleAfterSeconds` controls how long its last reading lingers.
+`forgetEndedAfterSeconds` controls how long its last reading lingers.
 
 Sessions genuinely run for weeks, so if the registry cannot be read the fallback
 window is a day rather than fifteen minutes. **Context Heat: Show Bridge Status**
@@ -235,7 +260,7 @@ If the bridge ever breaks it fails silently and your status line still renders.
 | `contextHeat.animate` | `true` | flicker the flames when hot |
 | `contextHeat.showPercentage` | `true` | number next to the flames |
 | `contextHeat.hideWhenCold` | `false` | hide entirely below the first band |
-| `contextHeat.staleAfterSeconds` | `900` | how long to keep a *finished* session's reading |
+| `contextHeat.forgetEndedAfterSeconds` | `900` | how long to keep an *ended* session's reading |
 | `contextHeat.focusRecentFraction` | `0.2` | tail of the conversation that counts as "now" |
 | `contextHeat.checkBridge` | `true` | check the bridge is installed at startup |
 | `contextHeat.pruneAfterDays` | `7` | delete old bridge files at startup |
