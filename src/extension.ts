@@ -166,13 +166,18 @@ function tooltipMarkdown(
   }
   // Deliberately coarse, and only when it is worth saying. A per-second
   // counter here is what made the hover redraw constantly.
-  if (reading.live) {
+  if (reading.liveness === 'live') {
     const idleMinutes = Math.floor((now - reading.ts) / 60000);
     md.appendMarkdown(
       idleMinutes >= 2 ? `\n\n_Session running, idle ${idleMinutes}m._` : '\n\n_Session running._'
     );
-  } else {
+  } else if (reading.liveness === 'ended') {
     md.appendMarkdown('\n\n_Session has ended._');
+  } else {
+    // No registry to ask, so say nothing about the process. Claiming it ended
+    // would be a statement we have no basis for.
+    const minutes = Math.floor((now - reading.ts) / 60000);
+    md.appendMarkdown(minutes >= 2 ? `\n\n_Last update ${minutes}m ago._` : '');
   }
   return lines.join('');
 }
@@ -507,7 +512,7 @@ export function activate(context: vscode.ExtensionContext) {
       output.appendLine(`Sessions:   ${all.length}`);
       for (const r of all) {
         const mark = reading && r.sessionId === reading.sessionId ? '->' : '  ';
-        const state = r.live ? 'live' : 'ended';
+        const state = r.liveness;
         output.appendLine(
           `${mark} ${String(Math.round(r.usedPercentage)).padStart(3)}%  ${state.padEnd(5)} ${r.cwd ?? '?'}`
         );

@@ -3,6 +3,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { LiveSessions } from './sessions';
 
+export type Liveness = 'live' | 'ended' | 'unknown';
+
 export interface RateLimit {
   usedPercentage: number;
   /** Unix seconds, or null if Claude Code did not report one. */
@@ -23,8 +25,13 @@ export interface HeatReading {
   sevenDay: RateLimit | null;
   /** File mtime. The bridge no longer stamps a time; the filesystem has one. */
   ts: number;
-  /** Whether a process is still serving this session. */
-  live: boolean;
+  /**
+   * Whether a process is still serving this session. `unknown` is a real and
+   * common answer — the registry may be absent on other Claude builds — and
+   * must not be reported as "ended", which is a claim about a session that may
+   * be very much alive.
+   */
+  liveness: Liveness;
 }
 
 export function defaultBridgeDirectory(): string {
@@ -126,7 +133,7 @@ export function parseReading(obj: any, fallbackId: string, ts: number): HeatRead
       fiveHour: limit(obj.rateLimits?.fiveHour ?? null),
       sevenDay: limit(obj.rateLimits?.sevenDay ?? null),
       ts,
-      live: false,
+      liveness: 'unknown',
     };
   }
 
@@ -148,7 +155,7 @@ export function parseReading(obj: any, fallbackId: string, ts: number): HeatRead
     fiveHour: limit(obj.rate_limits?.five_hour),
     sevenDay: limit(obj.rate_limits?.seven_day),
     ts,
-    live: false,
+    liveness: 'unknown',
   };
 }
 
@@ -197,11 +204,11 @@ export function readAll(
     }
 
     if (live.available) {
-      reading.live = live.ids.has(reading.sessionId);
+      reading.liveness = live.ids.has(reading.sessionId) ? 'live' : 'ended';
       // A running session is never stale, however long it has been idle: it is
       // still holding that context and you are coming back to it. Only a
       // session whose process has gone gets aged out.
-      if (reading.live || reading.ts >= endedCutoff) {
+      if (reading.liveness === 'live' || reading.ts >= endedCutoff) {
         out.push(reading);
       }
     } else if (reading.ts >= blindCutoff) {
@@ -298,7 +305,7 @@ export function selectForWorkspace(
   scored.sort(
     (a, b) =>
       b.score - a.score ||
-      Number(b.reading.live) - Number(a.reading.live) ||
+      Number(b.reading.liveness === 'live') - Number(a.reading.liveness === 'live') ||
       b.reading.ts - a.reading.ts
   );
   return scored[0].reading;

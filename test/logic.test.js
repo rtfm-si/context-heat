@@ -389,7 +389,7 @@ ls = readLiveSessions(lhome);
 const got2 = readAll(ldir, 900, ls);
 t('idle-but-running session survives the cutoff',
   got2.length === 1 && got2[0].sessionId === 'alive-1', JSON.stringify(got2.map(g=>g.sessionId)));
-t('running session is flagged live', got2[0] && got2[0].live === true);
+t('running session is flagged live', got2[0] && got2[0].liveness === 'live');
 t('ended session past the cutoff is dropped', !got2.some(g => g.sessionId === 'dead-1'));
 
 // without a registry we must not conclude everything is dead
@@ -402,8 +402,8 @@ t('no registry: genuinely ancient files still drop',
 
 // a live session beats a more recent dead one in the same folder
 const now3 = Date.now();
-const liveRec = { ...parseReading(JSON.parse(rawFor('L',30)), 'L', now3 - 60000), live:true };
-const endedRec = { ...parseReading(JSON.parse(rawFor('D',90)), 'D', now3), live:false };
+const liveRec = { ...parseReading(JSON.parse(rawFor('L',30)), 'L', now3 - 60000), liveness:'live' };
+const endedRec = { ...parseReading(JSON.parse(rawFor('D',90)), 'D', now3), liveness:'ended' };
 t('live session preferred over newer ended one',
   selectForWorkspace([endedRec, liveRec], ['/repos/alpha']).sessionId === 'L');
 
