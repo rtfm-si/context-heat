@@ -37,10 +37,9 @@ With just `["context"]` — the default — it reads `🔥🔥 74%` exactly as b
 labels only appear once there is something to tell apart. The tooltip always
 shows all three, with reset times.
 
-**The temperature follows your 5-hour session limit by default**, not the
-context window — that is usually the budget that actually stops you working.
-Set `contextHeat.heatFrom` to `context`, `weekly`, or `hottest` (the highest of
-the three) to change it.
+The temperature follows the context window by default. Set
+`contextHeat.heatFrom` to `fiveHour`, `weekly`, or `hottest` (the highest of the
+three) to change it.
 
 Heat is independent of display: it can follow a number the status bar is not
 showing, and the tooltip lists everything regardless. If Claude Code does not
@@ -120,6 +119,23 @@ transcript costs 113ms once, then 0ms. If the file is truncated or replaced the
 byte cursor is discarded and it starts over.
 
 `contextHeat.focusRecentFraction` (default `0.2`) sets what counts as "now".
+
+## Idle is not finished
+
+A bridge file is only rewritten when Claude renders its status line, which only
+happens when it is doing something. So a session you left open over lunch looks
+exactly like one you finished last week — and ageing files out by timestamp made
+the window go cold while the session sat there holding a full context window.
+
+Claude Code keeps a registry at `~/.claude/sessions/<pid>.json` pairing each
+session id with the process serving it, so the extension asks the OS whether
+that process is still running. **A running session is never aged out, however
+long it has been idle.** Only one whose process has gone gets dropped, and
+`staleAfterSeconds` controls how long its last reading lingers.
+
+Sessions genuinely run for weeks, so if the registry cannot be read the fallback
+window is a day rather than fifteen minutes. **Context Heat: Show Bridge Status**
+lists every session with its live/ended state.
 
 ## How it works
 
@@ -211,7 +227,7 @@ If the bridge ever breaks it fails silently and your status line still renders.
 | --- | --- | --- |
 | `contextHeat.enabled` | `true` | master switch |
 | `contextHeat.show` | `["context", "weekly", "focus"]` | also `fiveHour` |
-| `contextHeat.heatFrom` | `fiveHour` | or `context`, `weekly`, `hottest` |
+| `contextHeat.heatFrom` | `context` | or `fiveHour`, `weekly`, `hottest` |
 | `contextHeat.colorScope` | `workspace` | `workspace` \| `global` \| `off` |
 | `contextHeat.gradient` | `true` | ramp intensity down the window |
 | `contextHeat.surfaces` | `titleBar`, `activityBar`, `statusBar`, `windowBorder` | also `tabs`, `sideBar`, `panel` |
@@ -219,7 +235,7 @@ If the bridge ever breaks it fails silently and your status line still renders.
 | `contextHeat.animate` | `true` | flicker the flames when hot |
 | `contextHeat.showPercentage` | `true` | number next to the flames |
 | `contextHeat.hideWhenCold` | `false` | hide entirely below the first band |
-| `contextHeat.staleAfterSeconds` | `900` | ignore finished sessions |
+| `contextHeat.staleAfterSeconds` | `900` | how long to keep a *finished* session's reading |
 | `contextHeat.focusRecentFraction` | `0.2` | tail of the conversation that counts as "now" |
 | `contextHeat.checkBridge` | `true` | check the bridge is installed at startup |
 | `contextHeat.pruneAfterDays` | `7` | delete old bridge files at startup |

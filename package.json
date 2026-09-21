@@ -2,7 +2,7 @@
   "name": "context-heat",
   "displayName": "Context Heat",
   "description": "Your editor gets hot as your Claude Code context window fills up.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "rtfm-si",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -104,7 +104,7 @@
             "weekly",
             "hottest"
           ],
-          "default": "fiveHour",
+          "default": "context",
           "enumDescriptions": [
             "Follow the context window.",
             "Follow the 5-hour session limit.",
@@ -230,7 +230,7 @@
         "contextHeat.staleAfterSeconds": {
           "type": "number",
           "default": 900,
-          "description": "Ignore session files older than this. Stops a finished session keeping your window hot."
+          "description": "How long after a session ENDS to keep showing its last reading. Running sessions are never aged out, however long they sit idle."
         },
         "contextHeat.pruneAfterDays": {
           "type": "number",

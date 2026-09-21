@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.3
+
+- Idle sessions are no longer treated as finished. Liveness now comes from
+  Claude Code's session registry and a process check, so a session left open
+  keeps its temperature however long it sits. Only sessions whose process has
+  gone are aged out.
+- Fixed the hover tooltip redrawing every second. It carried a live "updated Ns
+  ago" counter and was reassigned on every tick, which tore down an open hover.
+- `heatFrom` defaults to `context` again.
+
 ## 0.0.2
 
 - The extension now offers to install the statusline bridge on first launch, and

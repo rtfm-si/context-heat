@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { LiveSessions } from './sessions';
 
 export interface RateLimit {
   usedPercentage: number;
@@ -22,6 +23,8 @@ export interface HeatReading {
   sevenDay: RateLimit | null;
   /** File mtime. The bridge no longer stamps a time; the filesystem has one. */
   ts: number;
+  /** Whether a process is still serving this session. */
+  live: boolean;
 }
 
 export function defaultBridgeDirectory(): string {
@@ -123,6 +126,7 @@ export function parseReading(obj: any, fallbackId: string, ts: number): HeatRead
       fiveHour: limit(obj.rateLimits?.fiveHour ?? null),
       sevenDay: limit(obj.rateLimits?.sevenDay ?? null),
       ts,
+      live: false,
     };
   }
 
@@ -144,6 +148,7 @@ export function parseReading(obj: any, fallbackId: string, ts: number): HeatRead
     fiveHour: limit(obj.rate_limits?.five_hour),
     sevenDay: limit(obj.rate_limits?.seven_day),
     ts,
+    live: false,
   };
 }
 
@@ -158,21 +163,48 @@ function readOne(file: string): HeatReading | null {
   }
 }
 
-export function readAll(dir: string, staleAfterSeconds: number): HeatReading[] {
+/**
+ * When the registry is unavailable we cannot tell idle from finished, so the
+ * cutoff has to be generous enough not to hide a session someone is coming
+ * back to. Sessions genuinely run for weeks.
+ */
+const BLIND_FALLBACK_SECONDS = 24 * 60 * 60;
+
+export function readAll(
+  dir: string,
+  staleAfterSeconds: number,
+  liveSessions?: LiveSessions
+): HeatReading[] {
   let names: string[];
   try {
     names = fs.readdirSync(dir);
   } catch {
     return [];
   }
-  const cutoff = Date.now() - Math.max(0, staleAfterSeconds) * 1000;
+
+  const live = liveSessions ?? { available: false, ids: new Set<string>() };
+  const endedCutoff = Date.now() - Math.max(0, staleAfterSeconds) * 1000;
+  const blindCutoff = Date.now() - Math.max(staleAfterSeconds, BLIND_FALLBACK_SECONDS) * 1000;
+
   const out: HeatReading[] = [];
   for (const name of names) {
     if (!name.endsWith('.json') || name === 'raw.json' || name.startsWith('.')) {
       continue;
     }
     const reading = readOne(path.join(dir, name));
-    if (reading && reading.ts >= cutoff) {
+    if (!reading) {
+      continue;
+    }
+
+    if (live.available) {
+      reading.live = live.ids.has(reading.sessionId);
+      // A running session is never stale, however long it has been idle: it is
+      // still holding that context and you are coming back to it. Only a
+      // session whose process has gone gets aged out.
+      if (reading.live || reading.ts >= endedCutoff) {
+        out.push(reading);
+      }
+    } else if (reading.ts >= blindCutoff) {
       out.push(reading);
     }
   }
@@ -261,6 +293,13 @@ export function selectForWorkspace(
   if (scored.length === 0) {
     return null;
   }
-  scored.sort((a, b) => b.score - a.score || b.reading.ts - a.reading.ts);
+  // Location first, then liveness, then recency: a running session beats a
+  // finished one in the same folder even if the finished one rendered later.
+  scored.sort(
+    (a, b) =>
+      b.score - a.score ||
+      Number(b.reading.live) - Number(a.reading.live) ||
+      b.reading.ts - a.reading.ts
+  );
   return scored[0].reading;
 }

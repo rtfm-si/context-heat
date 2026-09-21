@@ -61,9 +61,11 @@ t('exact beats parent', selectForWorkspace([mk('parent','/repos',90,now), mk('ex
 fs.rmSync('/tmp/ch-sel',{recursive:true,force:true}); fs.mkdirSync('/tmp/ch-sel',{recursive:true});
 fs.writeFileSync('/tmp/ch-sel/broken.json','{not json');
 fs.writeFileSync('/tmp/ch-sel/old.json', JSON.stringify(mk('old','/x',99, now-3600e3)));
-// staleness comes from file mtime now: raw Claude payloads carry no timestamp,
-// and the filesystem's is harder to get wrong than one written into the body.
-const stale = (Date.now() - 3600e3) / 1000;
+// Staleness comes from file mtime: raw Claude payloads carry no timestamp, and
+// the filesystem's is harder to get wrong than one written into the body.
+// With no session registry the cutoff is deliberately generous - an hour idle
+// is not "finished" - so this fixture has to be genuinely ancient.
+const stale = (Date.now() - 48 * 3600e3) / 1000;
 fs.utimesSync('/tmp/ch-sel/old.json', stale, stale);
 fs.writeFileSync('/tmp/ch-sel/good.json', JSON.stringify(mk('good','/x',42, now)));
 fs.writeFileSync('/tmp/ch-sel/raw.json', JSON.stringify({huge:'ignored'}));
@@ -347,6 +349,63 @@ t('wire: creates settings when absent',
   JSON.parse(fs.readFileSync(bhome+'/.claude/settings.json','utf8')).statusLine.command.endsWith('context-heat-statusline.sh'));
 t('wire: no backup when there was nothing to back up', res.backupPath === null);
 t('wire: no inner preserved when there was no status line', res.preservedInner === null);
+
+
+// ===== session liveness =====
+const { readLiveSessions } = require('../out/sessions.js');
+const lhome = require('os').tmpdir() + '/ch-live';
+const mkReg = (entries) => {
+  fs.rmSync(lhome,{recursive:true,force:true});
+  fs.mkdirSync(lhome+'/.claude/sessions',{recursive:true});
+  for (const e of entries) fs.writeFileSync(lhome+'/.claude/sessions/'+e.pid+'.json', JSON.stringify(e));
+};
+const DEAD_PID = 999999;   // not going to exist
+mkReg([{pid:process.pid, sessionId:'alive-1', cwd:'/repos/alpha'},
+       {pid:DEAD_PID,    sessionId:'dead-1',  cwd:'/repos/alpha'}]);
+let ls = readLiveSessions(lhome);
+t('liveness: registry available', ls.available === true);
+t('liveness: running pid is live', ls.ids.has('alive-1'));
+t('liveness: gone pid is not live', !ls.ids.has('dead-1'));
+mkReg([]);
+t('liveness: empty registry reports unavailable', readLiveSessions(lhome).available === false);
+t('liveness: missing dir reports unavailable', readLiveSessions('/tmp/ch-nope-xyz').available === false);
+fs.writeFileSync(lhome+'/.claude/sessions/junk.json','{broken');
+t('liveness: unparseable entry does not throw', readLiveSessions(lhome).available === false);
+
+// an idle-but-running session must survive the staleness cutoff
+const ldir = require('os').tmpdir() + '/ch-livebridge';
+fs.rmSync(ldir,{recursive:true,force:true}); fs.mkdirSync(ldir,{recursive:true});
+const rawFor = (id,pct) => JSON.stringify({session_id:id, cwd:'/repos/alpha',
+  workspace:{current_dir:'/repos/alpha',project_dir:'/repos/alpha'},
+  context_window:{context_window_size:1000000, used_percentage:pct}});
+fs.writeFileSync(ldir+'/alive-1.json', rawFor('alive-1',80));
+fs.writeFileSync(ldir+'/dead-1.json',  rawFor('dead-1',40));
+const longAgo = (Date.now() - 6*3600e3)/1000;              // idle six hours
+fs.utimesSync(ldir+'/alive-1.json', longAgo, longAgo);
+fs.utimesSync(ldir+'/dead-1.json',  longAgo, longAgo);
+mkReg([{pid:process.pid, sessionId:'alive-1', cwd:'/repos/alpha'},
+       {pid:DEAD_PID,    sessionId:'dead-1',  cwd:'/repos/alpha'}]);
+ls = readLiveSessions(lhome);
+const got2 = readAll(ldir, 900, ls);
+t('idle-but-running session survives the cutoff',
+  got2.length === 1 && got2[0].sessionId === 'alive-1', JSON.stringify(got2.map(g=>g.sessionId)));
+t('running session is flagged live', got2[0] && got2[0].live === true);
+t('ended session past the cutoff is dropped', !got2.some(g => g.sessionId === 'dead-1'));
+
+// without a registry we must not conclude everything is dead
+const blind = readAll(ldir, 900, { available:false, ids:new Set() });
+t('no registry: falls back to a generous window, not 15 minutes', blind.length === 2, 'kept=' + blind.length);
+const ancient = (Date.now() - 48*3600e3)/1000;
+fs.utimesSync(ldir+'/dead-1.json', ancient, ancient);
+t('no registry: genuinely ancient files still drop',
+  readAll(ldir, 900, { available:false, ids:new Set() }).length === 1);
+
+// a live session beats a more recent dead one in the same folder
+const now3 = Date.now();
+const liveRec = { ...parseReading(JSON.parse(rawFor('L',30)), 'L', now3 - 60000), live:true };
+const endedRec = { ...parseReading(JSON.parse(rawFor('D',90)), 'D', now3), live:false };
+t('live session preferred over newer ended one',
+  selectForWorkspace([endedRec, liveRec], ['/repos/alpha']).sessionId === 'L');
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 console.log('scale:');

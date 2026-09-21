@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { Band, bandFor, BANDS, normalizeThresholds, Thresholds } from './bands';
+import { readLiveSessions } from './sessions';
 import {
   HeatReading,
   pruneOldFiles,
@@ -78,7 +79,7 @@ function readSettings(): Settings {
     bridgeDirectory: resolveBridgeDirectory(c.get<string>('bridgeDirectory', '')),
     staleAfterSeconds: c.get<number>('staleAfterSeconds', 900),
     show: normalizeShow(c.get('show', ['context', 'weekly', 'focus'])),
-    heatFrom: c.get<HeatSource>('heatFrom', 'fiveHour'),
+    heatFrom: c.get<HeatSource>('heatFrom', 'context'),
     pruneAfterDays: c.get<number>('pruneAfterDays', 7),
     focusRecentFraction: c.get<number>('focusRecentFraction', 0.2),
     checkBridge: c.get<boolean>('checkBridge', true),
@@ -89,16 +90,30 @@ function workspacePaths(): string[] {
   return (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
 }
 
-function tooltip(
+/**
+ * Build the hover as a plain string.
+ *
+ * render() runs every second, and on every flicker frame. Assigning a fresh
+ * MarkdownString each time tears down an open hover and redraws it, so the
+ * popup flickers while you are trying to read it. Producing a string lets the
+ * caller assign only when the content actually changed — which also means the
+ * content must be *stable*: a live "updated 3s ago" counter would defeat the
+ * whole thing by differing on every tick.
+ */
+function tooltipMarkdown(
   reading: HeatReading | null,
   band: Band,
   metrics: Metric[],
   simulated: number | null,
   focus: number | null,
   showsFocus: boolean
-): vscode.MarkdownString {
-  const md = new vscode.MarkdownString(undefined, true);
-  md.isTrusted = true;
+): string {
+  const lines: string[] = [];
+  const md = {
+    appendMarkdown(text: string) {
+      lines.push(text);
+    },
+  };
   md.appendMarkdown(`**Context Heat** — ${band.blurb}\n\n`);
 
   if (simulated !== null) {
@@ -112,7 +127,7 @@ function tooltip(
         'Check that `statusLine` in `~/.claude/settings.json` points at ' +
         '`context-heat-statusline.sh`.'
     );
-    return md;
+    return lines.join('');
   }
 
   // The tooltip always shows all three, whatever the status bar is set to
@@ -149,9 +164,17 @@ function tooltip(
   if (reading.sessionName) {
     md.appendMarkdown(`\nSession: ${reading.sessionName}`);
   }
-  const age = Math.round((now - reading.ts) / 1000);
-  md.appendMarkdown(`\n\n_Updated ${age}s ago._`);
-  return md;
+  // Deliberately coarse, and only when it is worth saying. A per-second
+  // counter here is what made the hover redraw constantly.
+  if (reading.live) {
+    const idleMinutes = Math.floor((now - reading.ts) / 60000);
+    md.appendMarkdown(
+      idleMinutes >= 2 ? `\n\n_Session running, idle ${idleMinutes}m._` : '\n\n_Session running._'
+    );
+  } else {
+    md.appendMarkdown('\n\n_Session has ended._');
+  }
+  return lines.join('');
 }
 
 /**
@@ -244,6 +267,31 @@ export function activate(context: vscode.ExtensionContext) {
     return heatPercentage(allMetrics(), settings.heatFrom, contextPercentage());
   }
 
+  /**
+   * Only touch the status bar item when something changed. Reassigning these
+   * every tick is what made an open hover flicker.
+   */
+  let lastText: string | null = null;
+  let lastTooltip: string | null = null;
+  let lastBackground: 'warning' | 'error' | undefined | null = null;
+
+  function setText(text: string) {
+    if (lastText !== text) {
+      lastText = text;
+      item.text = text;
+    }
+  }
+
+  function setTooltip(markdown: string) {
+    if (lastTooltip === markdown) {
+      return;
+    }
+    lastTooltip = markdown;
+    const md = new vscode.MarkdownString(markdown, true);
+    md.isTrusted = true;
+    item.tooltip = md;
+  }
+
   function render() {
     const pct = effectivePercentage();
 
@@ -253,8 +301,8 @@ export function activate(context: vscode.ExtensionContext) {
     }
     if (pct === null) {
       // No session for this window. Show a quiet marker rather than a wrong number.
-      item.text = '$(circle-outline) Claude';
-      item.tooltip = tooltip(null, BANDS.cold, [], simulated, null, false);
+      setText('$(circle-outline) Claude');
+      setTooltip(tooltipMarkdown(null, BANDS.cold, [], simulated, null, false));
       item.backgroundColor = undefined;
       if (settings.hideWhenCold) {
         item.hide();
@@ -269,18 +317,24 @@ export function activate(context: vscode.ExtensionContext) {
     const glyph = frames[frame % frames.length];
     const metrics = currentMetrics();
 
-    item.text = formatStatusText(glyph, metrics, settings.showPercentage, band.suffix);
-    item.tooltip = tooltip(
-      reading,
-      band,
-      metrics,
-      simulated,
-      focusCache?.focus ?? null,
-      settings.show.includes('focus')
+    setText(formatStatusText(glyph, metrics, settings.showPercentage, band.suffix));
+    setTooltip(
+      tooltipMarkdown(
+        reading,
+        band,
+        metrics,
+        simulated,
+        focusCache?.focus ?? null,
+        settings.show.includes('focus')
+      )
     );
-    item.backgroundColor = band.itemBackground
+    const background = band.itemBackground
       ? new vscode.ThemeColor(`statusBarItem.${band.itemBackground}Background`)
       : undefined;
+    if (lastBackground !== band.itemBackground) {
+      lastBackground = band.itemBackground;
+      item.backgroundColor = background;
+    }
 
     if (band.name === 'cold' && settings.hideWhenCold) {
       item.hide();
@@ -292,7 +346,7 @@ export function activate(context: vscode.ExtensionContext) {
   async function tick() {
     const pctBefore = effectivePercentage();
     if (simulated === null) {
-      const all = readAll(settings.bridgeDirectory, settings.staleAfterSeconds);
+      const all = readAll(settings.bridgeDirectory, settings.staleAfterSeconds, readLiveSessions());
       reading = selectForWorkspace(all, workspacePaths());
     }
     refreshFocusIfDue();
@@ -446,14 +500,17 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand('contextHeat.installBridge', () => checkBridge(true)),
     vscode.commands.registerCommand('contextHeat.showStatus', () => {
-      const all = readAll(settings.bridgeDirectory, settings.staleAfterSeconds);
+      const all = readAll(settings.bridgeDirectory, settings.staleAfterSeconds, readLiveSessions());
       output.appendLine('');
       output.appendLine(`Bridge dir: ${settings.bridgeDirectory}`);
       output.appendLine(`Workspace:  ${workspacePaths().join(', ') || '(none)'}`);
       output.appendLine(`Sessions:   ${all.length}`);
       for (const r of all) {
         const mark = reading && r.sessionId === reading.sessionId ? '->' : '  ';
-        output.appendLine(`${mark} ${String(Math.round(r.usedPercentage)).padStart(3)}%  ${r.cwd ?? '?'}`);
+        const state = r.live ? 'live' : 'ended';
+        output.appendLine(
+          `${mark} ${String(Math.round(r.usedPercentage)).padStart(3)}%  ${state.padEnd(5)} ${r.cwd ?? '?'}`
+        );
       }
       output.show(true);
     })
