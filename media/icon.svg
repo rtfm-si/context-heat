@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="flame" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0"    stop-color="#ffd166"/>
+      <stop offset="0.28" stop-color="#ff8c1a"/>
+      <stop offset="0.62" stop-color="#ef4405"/>
+      <stop offset="1"    stop-color="#a11a0a"/>
+    </linearGradient>
+    <linearGradient id="core" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0"   stop-color="#fffbe8"/>
+      <stop offset="0.5" stop-color="#ffd166"/>
+      <stop offset="1"   stop-color="#ff8c1a"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="26" fill="#16100f"/>
+  <g transform="translate(64,64) scale(0.86) translate(-64,-64)">
+  <!-- outer flame: tall, with a lick falling to the left -->
+  <path fill="url(#flame)" d="
+    M70 10
+    C 70 34 84 44 90 58
+    C 96 72 94 92 82 104
+    C 74 112 62 116 52 113
+    C 38 109 30 96 31 81
+    C 32 68 40 60 45 50
+    C 48 56 52 59 56 60
+    C 52 46 56 26 70 10 Z"/>
+  <!-- inner core: brightest at the base, which is the whole idea -->
+  <path fill="url(#core)" d="
+    M66 56
+    C 66 68 74 74 75 84
+    C 76 95 69 104 60 104
+    C 51 104 45 96 46 87
+    C 47 78 56 72 58 62
+    C 60 66 63 68 66 56 Z"/>
+  </g>
+</svg>

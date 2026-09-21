@@ -1,0 +1,7 @@
+node_modules/
+out/
+*.vsix
+
+# Written by the extension itself as the context heats up, so it changes on
+# every band change. Machine state, not project configuration.
+.vscode/settings.json

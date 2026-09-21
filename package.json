@@ -1,0 +1,239 @@
+{
+  "name": "context-heat",
+  "displayName": "Context Heat",
+  "description": "Your editor gets hot as your Claude Code context window fills up.",
+  "version": "0.0.1",
+  "publisher": "si",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#16100f",
+    "theme": "dark"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "claude code",
+    "context",
+    "tokens",
+    "status bar",
+    "ai",
+    "llm",
+    "theme",
+    "rate limit"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/si/context-heat"
+  },
+  "bugs": {
+    "url": "https://github.com/si/context-heat/issues"
+  },
+  "homepage": "https://github.com/si/context-heat#readme",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "contextHeat.simulate",
+        "title": "Context Heat: Simulate Temperature"
+      },
+      {
+        "command": "contextHeat.clearSimulation",
+        "title": "Context Heat: Clear Simulation"
+      },
+      {
+        "command": "contextHeat.reset",
+        "title": "Context Heat: Reset Colors"
+      },
+      {
+        "command": "contextHeat.showStatus",
+        "title": "Context Heat: Show Bridge Status"
+      }
+    ],
+    "configuration": {
+      "title": "Context Heat",
+      "properties": {
+        "contextHeat.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Heat the UI as the Claude Code context window fills."
+        },
+        "contextHeat.show": {
+          "type": "array",
+          "default": [
+            "context"
+          ],
+          "items": {
+            "type": "string",
+            "enum": [
+              "context",
+              "fiveHour",
+              "weekly",
+              "focus"
+            ],
+            "enumDescriptions": [
+              "Context window used.",
+              "5-hour rate limit used.",
+              "Weekly rate limit used.",
+              "Share of conversation tokens touching files you are still working on."
+            ]
+          },
+          "uniqueItems": true,
+          "markdownDescription": "Which numbers appear in the status bar. With just `context` it reads `\ud83d\udd25\ud83d\udd25 74%`; add more and they get labelled: `\ud83d\udd25\ud83d\udd25 ctx 74% \u00b7 5h 34% \u00b7 7d 77% \u00b7 fcs 58%`.\n\n`focus` is a share of the **conversation**, not of the context window \u2014 they are not parts of one whole.\n\nThe tooltip always shows everything available."
+        },
+        "contextHeat.heatFrom": {
+          "type": "string",
+          "enum": [
+            "context",
+            "hottest"
+          ],
+          "default": "context",
+          "enumDescriptions": [
+            "Temperature follows the context window only.",
+            "Temperature follows whichever shown number is highest."
+          ],
+          "markdownDescription": "Which number drives the colour and flames. `hottest` only considers metrics listed in `#contextHeat.show#`."
+        },
+        "contextHeat.colorScope": {
+          "type": "string",
+          "enum": [
+            "workspace",
+            "global",
+            "off"
+          ],
+          "default": "workspace",
+          "enumDescriptions": [
+            "Write colors to this folder's .vscode/settings.json. Each window heats independently.",
+            "Write colors to your user settings. Every window heats together.",
+            "Never write colors. Status bar indicator only."
+          ],
+          "description": "Where to write workbench.colorCustomizations."
+        },
+        "contextHeat.gradient": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Ramp the tint down the window: faint at the title bar, full strength at the status bar. VS Code has no real gradient, so this uses alpha per surface, which composites over your theme and works in light and dark.\n\nTurn off for a flat tint on every surface."
+        },
+        "contextHeat.surfaces": {
+          "type": "array",
+          "default": [
+            "titleBar",
+            "activityBar",
+            "statusBar",
+            "windowBorder"
+          ],
+          "items": {
+            "type": "string",
+            "enum": [
+              "titleBar",
+              "tabs",
+              "sideBar",
+              "activityBar",
+              "panel",
+              "statusBar",
+              "windowBorder"
+            ]
+          },
+          "uniqueItems": true,
+          "markdownDescription": "Which chrome surfaces heat up, listed top to bottom. Enable more of them for a smoother gradient.\n\n`windowBorder` needs `window.titleBarStyle` set to `custom`."
+        },
+        "contextHeat.thresholds": {
+          "type": "object",
+          "default": {
+            "warm": 25,
+            "toasty": 45,
+            "hot": 60,
+            "blazing": 70,
+            "critical": 80,
+            "meltdown": 98
+          },
+          "markdownDescription": "Context percentage at which each band begins.\n\n`blazing` is \"on fire\" \u2014 the normal maximum heat. `critical` and `meltdown` escalate above it.\n\nSetting one value moves the defaults below it out of the way, so `{ \"blazing\": 55 }` alone works.",
+          "properties": {
+            "warm": {
+              "type": "number",
+              "description": "Faint amber."
+            },
+            "toasty": {
+              "type": "number",
+              "description": "Orange."
+            },
+            "hot": {
+              "type": "number",
+              "description": "Strong orange, starts flickering."
+            },
+            "blazing": {
+              "type": "number",
+              "description": "On fire. The normal maximum."
+            },
+            "critical": {
+              "type": "number",
+              "description": "Past maximum. Faster, harsher, shouts COMPACT."
+            },
+            "meltdown": {
+              "type": "number",
+              "description": "End of the scale."
+            }
+          },
+          "additionalProperties": false
+        },
+        "contextHeat.animate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Flicker the status bar flames in the hottest bands."
+        },
+        "contextHeat.showPercentage": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the numeric percentage next to the flames."
+        },
+        "contextHeat.hideWhenCold": {
+          "type": "boolean",
+          "default": false,
+          "description": "Hide the status bar item entirely below the first threshold."
+        },
+        "contextHeat.focusRecentFraction": {
+          "type": "number",
+          "default": 0.2,
+          "minimum": 0.05,
+          "maximum": 1,
+          "description": "What counts as \"now\" for focus: the fraction of the conversation, from the end, whose files define your current working set."
+        },
+        "contextHeat.bridgeDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "Directory the statusline bridge writes to. Defaults to ~/.claude/context-heat."
+        },
+        "contextHeat.staleAfterSeconds": {
+          "type": "number",
+          "default": 900,
+          "description": "Ignore session files older than this. Stops a finished session keeping your window hot."
+        },
+        "contextHeat.pruneAfterDays": {
+          "type": "number",
+          "default": 7,
+          "description": "Delete bridge files untouched for this many days, at startup."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npm run compile && npx @vscode/vsce package",
+    "test": "npm run compile && node test/logic.test.js && node test/scope.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.4.0"
+  }
+}

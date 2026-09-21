@@ -1,0 +1,13 @@
+.vscode/**
+src/**
+test/**
+out/**/*.map
+node_modules/**
+tsconfig.json
+idea.md
+.gitignore
+media/icon.svg
+media/build-icon.sh
+package-lock.json
+**/*.ts
+!out/**/*.js
