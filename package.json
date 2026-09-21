@@ -3,7 +3,7 @@
   "displayName": "Context Heat",
   "description": "Your editor gets hot as your Claude Code context window fills up.",
   "version": "0.0.1",
-  "publisher": "si",
+  "publisher": "rtfm-si",
   "license": "MIT",
   "icon": "media/icon.png",
   "galleryBanner": {
