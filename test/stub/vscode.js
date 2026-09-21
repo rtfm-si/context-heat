@@ -1,16 +1,37 @@
 const item = { text:'', tooltip:null, color:undefined, backgroundColor:undefined, shown:false,
   show(){this.shown=true;}, hide(){this.shown=false;}, dispose(){} };
 // separate stores, like the real thing
-const store = { global: {}, workspace: {}, contextHeat: {} };
+// checkBridge defaults OFF in the harness on purpose: activate() would
+// otherwise inspect the real ~/.claude and could offer to write to it.
+const store = { global: {}, workspace: {}, contextHeat: { checkBridge: false } };
+const memento = () => {
+  const store = new Map();
+  return { get: (k, d) => (store.has(k) ? store.get(k) : d), update: async (k, v) => void store.set(k, v) };
+};
+
 module.exports = {
+  // A plausible ExtensionContext for activate().
+  __context: () => ({
+    subscriptions: [],
+    extensionUri: { fsPath: require('path').join(__dirname, '..', '..') },
+    globalState: memento(),
+    workspaceState: memento(),
+  }),
   __item: item, __store: store, __msgs: [], __answer: undefined,
   StatusBarAlignment:{Right:2},
+  Uri:{ file:(p)=>({fsPath:p}),
+        joinPath:(base,...parts)=>({fsPath:require('path').join(base.fsPath,...parts)}) },
+  showErrorMessage:async()=>undefined,
   ThemeColor: class { constructor(id){this.id=id;} },
   MarkdownString: class { constructor(){this.value='';} appendMarkdown(s){this.value+=s;return this;} },
   ConfigurationTarget:{Global:1,Workspace:2},
-  window:{ createStatusBarItem:()=>item, createOutputChannel:()=>({appendLine:(l)=>{if(process.env.CH_VERBOSE)console.log('[out]',l);},show(){},dispose(){}}), showQuickPick:async()=>undefined, showInformationMessage:async(...a)=>{module.exports.__msgs.push(a[0]);return module.exports.__answer;} },
+  window:{ createStatusBarItem:()=>item, createOutputChannel:()=>({appendLine:(l)=>{if(process.env.CH_VERBOSE)console.log('[out]',l);},show(){},dispose(){}}), showQuickPick:async()=>undefined, showInformationMessage:async(...a)=>{module.exports.__msgs.push(a[0]);return module.exports.__answer;},
+    showWarningMessage:async(...a)=>{module.exports.__msgs.push(a[0]);return undefined;},
+    showErrorMessage:async(...a)=>{module.exports.__msgs.push(a[0]);return undefined;},
+    showTextDocument:async()=>undefined },
   commands:{ registerCommand:(id,fn)=>({dispose(){},id,fn}) },
   workspace:{
+    openTextDocument:async()=>({}),
     workspaceFolders:[{uri:{fsPath:'/repos/beta'}}],
     onDidChangeConfiguration:()=>({dispose(){}}),
     getConfiguration:(section)=>({

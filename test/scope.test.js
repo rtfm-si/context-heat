@@ -9,7 +9,7 @@ vscode.__store.global['workbench.colorCustomizations'] = { 'titleBar.activeBackg
 vscode.__store.contextHeat.bridgeDirectory = dir;
 const ext=require(__dirname + '/../out/extension.js');
 let pass=0,fail=0; const t=(n,c,e)=>{c?pass++:(fail++,console.log('  FAIL: '+n+(e?'  ['+e+']':'')));};
-ext.activate({subscriptions:[]});
+ext.activate(vscode.__context());
 setTimeout(async()=>{
   const ws=()=>vscode.__store.workspace['workbench.colorCustomizations']||{};
   const gl=()=>vscode.__store.global['workbench.colorCustomizations']||{};
@@ -29,7 +29,7 @@ setTimeout(async()=>{
   v2.__store.global['workbench.colorCustomizations']={'titleBar.activeBackground':'#2d2d44'};
   v2.__store.workspace['workbench.colorCustomizations']={'titleBar.activeBackground':'#c01705','myTheme.x':'#abc'};
   v2.__store.contextHeat.bridgeDirectory=dir;
-  const subs=[]; e2.activate({subscriptions:subs});
+  const ctx2=v2.__context(); const subs=ctx2.subscriptions; e2.activate(ctx2);
   await new Promise(r=>setTimeout(r,300));
   v2.__answer='Stop colouring';
   const reset = subs.find(x=>x&&x.id==='contextHeat.reset');

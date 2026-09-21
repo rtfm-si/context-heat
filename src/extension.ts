@@ -8,8 +8,11 @@ import {
   selectForWorkspace,
 } from './bridge';
 import { FocusCache, refresh as refreshFocus } from './focus';
+import { BridgeStatus, inspectBridge, installBridge } from './install';
 import {
   formatResetIn,
+  HeatSource,
+  METRIC_KEYS,
   formatStatusText,
   heatPercentage,
   Metric,
@@ -38,9 +41,10 @@ interface Settings {
   bridgeDirectory: string;
   staleAfterSeconds: number;
   show: MetricKey[];
-  heatFrom: 'context' | 'hottest';
+  heatFrom: HeatSource;
   pruneAfterDays: number;
   focusRecentFraction: number;
+  checkBridge: boolean;
 }
 
 /**
@@ -73,10 +77,11 @@ function readSettings(): Settings {
     hideWhenCold: c.get<boolean>('hideWhenCold', false),
     bridgeDirectory: resolveBridgeDirectory(c.get<string>('bridgeDirectory', '')),
     staleAfterSeconds: c.get<number>('staleAfterSeconds', 900),
-    show: normalizeShow(c.get('show')),
-    heatFrom: c.get<'context' | 'hottest'>('heatFrom', 'context'),
+    show: normalizeShow(c.get('show', ['context', 'weekly', 'focus'])),
+    heatFrom: c.get<HeatSource>('heatFrom', 'fiveHour'),
     pruneAfterDays: c.get<number>('pruneAfterDays', 7),
     focusRecentFraction: c.get<number>('focusRecentFraction', 0.2),
+    checkBridge: c.get<boolean>('checkBridge', true),
   };
 }
 
@@ -216,9 +221,27 @@ export function activate(context: vscode.ExtensionContext) {
     return reading ? reading.usedPercentage : null;
   }
 
+  /**
+   * Every metric, displayed or not. The temperature can follow a number the
+   * status bar is not showing, and the tooltip lists them all regardless.
+   */
+  function allMetrics(): Metric[] {
+    const metrics = metricsFor(reading, METRIC_KEYS, focusCache?.focus ?? null);
+    if (simulated === null) {
+      return metrics;
+    }
+    return metrics.map((m) => (m.key === 'context' ? { ...m, percentage: simulated! } : m));
+  }
+
   /** The number that actually drives the temperature. */
   function effectivePercentage(): number | null {
-    return heatPercentage(currentMetrics(), settings.heatFrom, contextPercentage());
+    // Simulation overrides whatever the heat source is. Otherwise, with
+    // `heatFrom` set to anything but context, the Simulate command would move
+    // a number nothing is watching and appear to do nothing at all.
+    if (simulated !== null) {
+      return simulated;
+    }
+    return heatPercentage(allMetrics(), settings.heatFrom, contextPercentage());
   }
 
   function render() {
@@ -421,6 +444,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
       await tick();
     }),
+    vscode.commands.registerCommand('contextHeat.installBridge', () => checkBridge(true)),
     vscode.commands.registerCommand('contextHeat.showStatus', () => {
       const all = readAll(settings.bridgeDirectory, settings.staleAfterSeconds);
       output.appendLine('');
@@ -435,6 +459,103 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  /**
+   * Installing the extension does not install the bridge, and without the
+   * bridge nothing works — so offer, rather than leaving someone with a status
+   * bar that says "no session found" and a README to go and read.
+   *
+   * A declined version is remembered so this asks once, not every launch.
+   */
+  async function checkBridge(explicit: boolean) {
+    if (!explicit && !settings.checkBridge) {
+      return;
+    }
+    const shipped = vscode.Uri.joinPath(
+      context.extensionUri,
+      'bin',
+      'context-heat-statusline.sh'
+    ).fsPath;
+
+    let status: BridgeStatus;
+    try {
+      status = inspectBridge(shipped);
+    } catch {
+      return;
+    }
+
+    if (status.state === 'current' && status.wired) {
+      if (explicit) {
+        void vscode.window.showInformationMessage(
+          `Context Heat: bridge is installed and wired up (${status.installedPath}).`
+        );
+      }
+      return;
+    }
+
+    const dismissKey = `bridgeDismissed:${status.shippedHash}:${status.wired}`;
+    if (!explicit && context.globalState.get<boolean>(dismissKey)) {
+      return;
+    }
+
+    const needsWiring = !status.wired;
+    const message =
+      status.state === 'missing'
+        ? 'Context Heat needs a small bridge script in ~/.claude to read your context percentage.'
+        : status.state === 'outdated'
+          ? 'Context Heat: the installed bridge script is from an older version.'
+          : 'Context Heat: the bridge is installed, but Claude Code is not pointed at it.';
+
+    const primary = needsWiring ? 'Install and wire up' : 'Update script';
+    const actions = [primary];
+    if (needsWiring && status.state !== 'current') {
+      actions.push('Copy script only');
+    }
+    actions.push('Not now');
+
+    const choice = await vscode.window.showInformationMessage(
+      message +
+        (needsWiring && status.existingCommand
+          ? ' Your current status line is kept and rendered through it.'
+          : ''),
+      ...actions
+    );
+
+    if (choice === undefined || choice === 'Not now') {
+      if (!explicit) {
+        await context.globalState.update(dismissKey, true);
+      }
+      return;
+    }
+
+    try {
+      const result = installBridge(shipped, { wire: choice === primary && needsWiring });
+      const parts: string[] = [];
+      if (result.copiedScript) {
+        parts.push(`installed ${status.installedPath}`);
+      }
+      if (result.wiredStatusLine) {
+        parts.push('pointed Claude Code at it');
+      }
+      if (result.preservedInner) {
+        parts.push(`kept \`${result.preservedInner}\` as your status line`);
+      }
+      if (result.backupPath) {
+        parts.push(`backup at ${result.backupPath}`);
+      }
+      const followUps = result.backupPath ? ['Show settings'] : [];
+      const action = await vscode.window.showInformationMessage(
+        `Context Heat: ${parts.join(', ')}. Restart Claude Code for it to take effect.`,
+        ...followUps
+      );
+      if (action === 'Show settings') {
+        const doc = await vscode.workspace.openTextDocument(status.claudeSettingsPath);
+        await vscode.window.showTextDocument(doc);
+      }
+    } catch (err) {
+      void vscode.window.showErrorMessage(`Context Heat: could not install the bridge — ${String(err)}`);
+    }
+  }
+
   // One file per session was written and none were ever removed. Prune at
   // activation rather than in the bridge: a `find` spawn per status line render
   // would put back the cost we just took out of it.
@@ -447,6 +568,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Housekeeping is never worth failing activation over.
   }
 
+  void checkBridge(false);
   void tick();
 }
 

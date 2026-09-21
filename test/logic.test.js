@@ -76,7 +76,7 @@ t('reads live bridge', live.length > 0);
 
 // ===== raw payload parsing, rate limits, metrics =====
 const { parseReading, pruneOldFiles } = require('../out/bridge.js');
-const { metricsFor, heatPercentage, formatStatusText, formatResetIn, normalizeShow } = require('../out/metrics.js');
+const { metricsFor, heatPercentage, formatStatusText, formatResetIn, normalizeShow, METRIC_KEYS } = require('../out/metrics.js');
 
 const RAW = {
   session_id: 'abc-123', cwd: '/p', transcript_path: '/t.jsonl',
@@ -259,6 +259,94 @@ t('focus excluded from hottest', heatPercentage(withFocus, 'hottest', 74) === 74
 t('focus omitted when unavailable', metricsFor(rFocus, ['context','focus'], null).length === 1);
 t('focus labelled in status text',
   formatStatusText('🔥', withFocus, true, '') === '🔥 ctx 74% · fcs 95%');
+
+
+// ===== heat source =====
+const rHeat = parseReading(RAW, 'f', 0);              // ctx 74, 5h 34, 7d 77
+const allM = metricsFor(rHeat, METRIC_KEYS, 58);
+t('heatFrom fiveHour follows the 5h number', heatPercentage(allM, 'fiveHour', 74) === 34);
+t('heatFrom weekly follows the weekly number', heatPercentage(allM, 'weekly', 74) === 77);
+t('heatFrom context follows context', heatPercentage(allM, 'context', 74) === 74);
+t('heatFrom hottest still picks the max', heatPercentage(allM, 'hottest', 74) === 77);
+t('focus never wins hottest even when highest',
+  heatPercentage(metricsFor(rHeat, METRIC_KEYS, 99), 'hottest', 74) === 77);
+// heat can follow a metric the status bar is not showing
+const shown = metricsFor(rHeat, ['context']);
+t('heat is independent of what is displayed',
+  heatPercentage(allM, 'fiveHour', 74) === 34 && shown.length === 1);
+// missing limit falls back rather than going cold
+const noLim = parseReading({ session_id:'x', context_window:{ used_percentage: 62 } }, 'f', 0);
+t('unreported source falls back to context',
+  heatPercentage(metricsFor(noLim, METRIC_KEYS), 'fiveHour', 62) === 62);
+t('hottest with nothing heatable falls back',
+  heatPercentage([], 'hottest', 62) === 62);
+
+// ===== bridge install =====
+const { inspectBridge, installBridge, expandHome } = require('../out/install.js');
+const bhome = require('os').tmpdir() + '/ch-home';
+const shipped = require('path').join(__dirname, '..', 'bin', 'context-heat-statusline.sh');
+const reset = () => { fs.rmSync(bhome,{recursive:true,force:true}); fs.mkdirSync(bhome+'/.claude',{recursive:true}); };
+
+reset();
+let st = inspectBridge(shipped, bhome);
+t('bridge: reports missing', st.state === 'missing' && st.wired === false);
+t('bridge: hash is stable', st.shippedHash === inspectBridge(shipped, bhome).shippedHash);
+
+// install without wiring
+let res = installBridge(shipped, { wire: false, home: bhome });
+t('bridge: copies the script', res.copiedScript && fs.existsSync(bhome + '/.claude/context-heat-statusline.sh'));
+t('bridge: script is executable', (fs.statSync(bhome+'/.claude/context-heat-statusline.sh').mode & 0o111) !== 0);
+t('bridge: now current but unwired', (() => { const s2 = inspectBridge(shipped, bhome); return s2.state === 'current' && !s2.wired; })());
+
+// an existing status line must be preserved, not replaced
+reset();
+fs.writeFileSync(bhome+'/.claude/settings.json', JSON.stringify({
+  model:'opus', statusLine:{ type:'command', command:'npx -y ccstatusline@latest', padding:0 }
+}, null, 2));
+res = installBridge(shipped, { wire: true, home: bhome });
+const written = JSON.parse(fs.readFileSync(bhome+'/.claude/settings.json','utf8'));
+t('wire: statusLine points at the bridge',
+  written.statusLine.command === bhome + '/.claude/context-heat-statusline.sh');
+t('wire: previous status line preserved as inner',
+  written.env.CONTEXT_HEAT_INNER === 'npx -y ccstatusline@latest', JSON.stringify(written.env));
+t('wire: unrelated settings untouched', written.model === 'opus');
+t('wire: padding preserved', written.statusLine.padding === 0);
+t('wire: backup written', !!res.backupPath && fs.existsSync(res.backupPath));
+t('wire: reports what it preserved', res.preservedInner === 'npx -y ccstatusline@latest');
+t('wire: now detected as wired', inspectBridge(shipped, bhome).wired === true);
+
+// tilde form counts as wired - must not re-prompt someone who typed it
+fs.writeFileSync(bhome+'/.claude/settings.json', JSON.stringify({
+  statusLine:{ type:'command', command:'~/.claude/context-heat-statusline.sh' }
+}));
+t('wire: tilde path recognised as wired', inspectBridge(shipped, bhome).wired === true);
+t('expandHome resolves ~', expandHome('~/x', bhome) === bhome + '/x');
+t('expandHome leaves absolute alone', expandHome('/a/b', bhome) === '/a/b');
+
+// outdated detection
+fs.writeFileSync(bhome+'/.claude/context-heat-statusline.sh', '#!/bin/sh\necho old\n');
+t('bridge: detects an outdated script', inspectBridge(shipped, bhome).state === 'outdated');
+// trailing whitespace alone is not "outdated"
+fs.writeFileSync(bhome+'/.claude/context-heat-statusline.sh', fs.readFileSync(shipped,'utf8') + '\n\n');
+t('bridge: trailing newlines do not count as outdated', inspectBridge(shipped, bhome).state === 'current');
+
+// a settings file we cannot parse must never be rewritten
+reset();
+fs.writeFileSync(bhome+'/.claude/settings.json', '{ this is not json');
+const before = fs.readFileSync(bhome+'/.claude/settings.json','utf8');
+res = installBridge(shipped, { wire: true, home: bhome });
+t('wire: refuses to rewrite unparseable settings',
+  fs.readFileSync(bhome+'/.claude/settings.json','utf8') === before && !res.wiredStatusLine);
+t('wire: still copies the script when settings are broken', res.copiedScript);
+
+// no settings file at all
+reset();
+fs.rmSync(bhome+'/.claude/settings.json',{force:true});
+res = installBridge(shipped, { wire: true, home: bhome });
+t('wire: creates settings when absent',
+  JSON.parse(fs.readFileSync(bhome+'/.claude/settings.json','utf8')).statusLine.command.endsWith('context-heat-statusline.sh'));
+t('wire: no backup when there was nothing to back up', res.backupPath === null);
+t('wire: no inner preserved when there was no status line', res.preservedInner === null);
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 console.log('scale:');

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.2
+
+- The extension now offers to install the statusline bridge on first launch, and
+  to update it when the shipped script changes. An existing `statusLine` command
+  is preserved as `CONTEXT_HEAT_INNER` rather than replaced.
+- `heatFrom` can name a specific metric. It defaults to `fiveHour`: the 5-hour
+  session limit is usually the budget that stops you working.
+- `show` defaults to context, weekly and focus.
+
 ## 0.0.1
 
 First release.

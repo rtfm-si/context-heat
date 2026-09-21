@@ -2,7 +2,7 @@
   "name": "context-heat",
   "displayName": "Context Heat",
   "description": "Your editor gets hot as your Claude Code context window fills up.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "rtfm-si",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -57,6 +57,10 @@
       {
         "command": "contextHeat.showStatus",
         "title": "Context Heat: Show Bridge Status"
+      },
+      {
+        "command": "contextHeat.installBridge",
+        "title": "Context Heat: Install or Update Statusline Bridge"
       }
     ],
     "configuration": {
@@ -70,7 +74,9 @@
         "contextHeat.show": {
           "type": "array",
           "default": [
-            "context"
+            "context",
+            "weekly",
+            "focus"
           ],
           "items": {
             "type": "string",
@@ -94,14 +100,18 @@
           "type": "string",
           "enum": [
             "context",
+            "fiveHour",
+            "weekly",
             "hottest"
           ],
-          "default": "context",
+          "default": "fiveHour",
           "enumDescriptions": [
-            "Temperature follows the context window only.",
-            "Temperature follows whichever shown number is highest."
+            "Follow the context window.",
+            "Follow the 5-hour session limit.",
+            "Follow the weekly limit.",
+            "Follow whichever of the three is highest."
           ],
-          "markdownDescription": "Which number drives the colour and flames. `hottest` only considers metrics listed in `#contextHeat.show#`."
+          "markdownDescription": "Which number drives the colour and flames.\n\nThis is independent of `#contextHeat.show#` \u2014 the temperature can follow a number the status bar is not displaying. If Claude Code does not report the chosen limit, it falls back to the context window rather than going cold."
         },
         "contextHeat.colorScope": {
           "type": "string",
@@ -206,6 +216,11 @@
           "minimum": 0.05,
           "maximum": 1,
           "description": "What counts as \"now\" for focus: the fraction of the conversation, from the end, whose files define your current working set."
+        },
+        "contextHeat.checkBridge": {
+          "type": "boolean",
+          "default": true,
+          "description": "On startup, check whether the statusline bridge is installed and up to date, and offer to fix it."
         },
         "contextHeat.bridgeDirectory": {
           "type": "string",

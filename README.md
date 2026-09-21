@@ -37,16 +37,15 @@ With just `["context"]` — the default — it reads `🔥🔥 74%` exactly as b
 labels only appear once there is something to tell apart. The tooltip always
 shows all three, with reset times.
 
-By default the temperature still follows context alone. To let whichever number
-is highest drive the colour:
+**The temperature follows your 5-hour session limit by default**, not the
+context window — that is usually the budget that actually stops you working.
+Set `contextHeat.heatFrom` to `context`, `weekly`, or `hottest` (the highest of
+the three) to change it.
 
-```json
-"contextHeat.heatFrom": "hottest"
-```
-
-That matters more than it sounds: running out of *week* is worse than running
-out of context, and a 78% weekly limit will light the window up while context is
-still at 16%.
+Heat is independent of display: it can follow a number the status bar is not
+showing, and the tooltip lists everything regardless. If Claude Code does not
+report the chosen limit, it falls back to the context window rather than going
+cold — a window that quietly stopped reacting reads as a broken extension.
 
 A rate limit Claude Code did not report is omitted rather than shown as `0%` —
 on a status bar, "none used" and "don't know" must not look identical.
@@ -167,7 +166,20 @@ code --install-extension context-heat-0.0.1.vsix
 
 You do not need the Marketplace to use this.
 
-Then wire up the bridge in `~/.claude/settings.json`:
+On first launch the extension notices the bridge is missing and offers to
+install it: it copies the script to `~/.claude/` and points Claude Code's
+`statusLine` at it. Restart Claude Code and it starts working.
+
+It also notices when the installed script is older than the one shipped, and
+offers to update. Declining is remembered per version, so it asks once rather
+than every launch. **Context Heat: Install or Update Statusline Bridge** runs
+the same check on demand, and `contextHeat.checkBridge` turns the startup check
+off entirely.
+
+It will not touch a `~/.claude/settings.json` it cannot parse, and it backs the
+file up to `settings.json.context-heat.bak` before writing.
+
+To wire it by hand instead:
 
 ```json
 "statusLine": {
@@ -177,13 +189,14 @@ Then wire up the bridge in `~/.claude/settings.json`:
 }
 ```
 
-Copy `bin/context-heat-statusline.sh` to `~/.claude/` and `chmod +x` it.
-
 ### Keeping your existing status line
 
-The bridge wraps rather than replaces. By default it pipes through to
-`ccstatusline`; your status line looks exactly as it did. To wrap something
-else, or nothing:
+The bridge wraps rather than replaces. If you already had a `statusLine`
+command, installing moves it to `CONTEXT_HEAT_INNER` and the bridge pipes
+through to it, so your status line renders exactly as it did. Silently
+replacing it would be the worst possible first impression.
+
+To change what it wraps, or wrap nothing:
 
 ```sh
 CONTEXT_HEAT_INNER="my-statusline --flags"   # something else
@@ -197,8 +210,8 @@ If the bridge ever breaks it fails silently and your status line still renders.
 | Setting | Default | |
 | --- | --- | --- |
 | `contextHeat.enabled` | `true` | master switch |
-| `contextHeat.show` | `["context"]` | also `fiveHour`, `weekly`, `focus` |
-| `contextHeat.heatFrom` | `context` | or `hottest` of the shown numbers |
+| `contextHeat.show` | `["context", "weekly", "focus"]` | also `fiveHour` |
+| `contextHeat.heatFrom` | `fiveHour` | or `context`, `weekly`, `hottest` |
 | `contextHeat.colorScope` | `workspace` | `workspace` \| `global` \| `off` |
 | `contextHeat.gradient` | `true` | ramp intensity down the window |
 | `contextHeat.surfaces` | `titleBar`, `activityBar`, `statusBar`, `windowBorder` | also `tabs`, `sideBar`, `panel` |
@@ -208,6 +221,7 @@ If the bridge ever breaks it fails silently and your status line still renders.
 | `contextHeat.hideWhenCold` | `false` | hide entirely below the first band |
 | `contextHeat.staleAfterSeconds` | `900` | ignore finished sessions |
 | `contextHeat.focusRecentFraction` | `0.2` | tail of the conversation that counts as "now" |
+| `contextHeat.checkBridge` | `true` | check the bridge is installed at startup |
 | `contextHeat.pruneAfterDays` | `7` | delete old bridge files at startup |
 
 ### Configuring what counts as "on fire"

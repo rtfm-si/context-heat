@@ -12,6 +12,9 @@ export const METRIC_KEYS: MetricKey[] = ['context', 'fiveHour', 'weekly', 'focus
  */
 export const HEAT_METRICS: MetricKey[] = ['context', 'fiveHour', 'weekly'];
 
+/** What the temperature follows. */
+export type HeatSource = 'context' | 'fiveHour' | 'weekly' | 'hottest';
+
 export interface Metric {
   key: MetricKey;
   /** Compact label for the status bar. */
@@ -69,10 +72,20 @@ export function metricsFor(
   return out;
 }
 
-/** Which percentage drives the temperature. */
+/**
+ * Which percentage drives the temperature.
+ *
+ * `metrics` must be every metric available, not just the ones on display: you
+ * can perfectly reasonably heat from the 5-hour limit while showing context and
+ * weekly, and the colour should still be right.
+ *
+ * A named source that Claude Code did not report falls back to context rather
+ * than going cold. A window that quietly stopped reacting would read as the
+ * extension being broken, which is worse than heating from the wrong number.
+ */
 export function heatPercentage(
   metrics: Metric[],
-  heatFrom: 'context' | 'hottest',
+  heatFrom: HeatSource,
   contextPercentage: number | null
 ): number | null {
   if (heatFrom === 'hottest') {
@@ -80,8 +93,10 @@ export function heatPercentage(
     if (heatable.length > 0) {
       return Math.max(...heatable.map((m) => m.percentage));
     }
+    return contextPercentage;
   }
-  return contextPercentage;
+  const named = metrics.find((m) => m.key === heatFrom);
+  return named ? named.percentage : contextPercentage;
 }
 
 /**
