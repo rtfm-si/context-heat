@@ -2,7 +2,7 @@ const Module=require('module');const orig=Module._resolveFilename;
 Module._resolveFilename=function(r,...a){return r==='vscode'?require('path').join(__dirname,'stub/vscode.js'):orig.call(this,r,...a);};
 const fs=require('fs'); const dir=require('os').tmpdir() + '/ch-scope-bridge';
 fs.rmSync(dir,{recursive:true,force:true}); fs.mkdirSync(dir,{recursive:true});
-fs.writeFileSync(dir+'/s.json', JSON.stringify({sessionId:'t',cwd:'/Users/si/projects/game-centre',currentDir:'/Users/si/projects/game-centre',usedPercentage:85,contextWindowSize:200000,model:'Opus 5',sessionName:'scope test',exceeds200k:false,rateLimits:{fiveHour:null,sevenDay:null},ts:Date.now()}));
+fs.writeFileSync(dir+'/s.json', JSON.stringify({sessionId:'t',cwd:'/repos/beta',currentDir:'/repos/beta',usedPercentage:85,contextWindowSize:200000,model:'Opus 5',sessionName:'scope test',exceeds200k:false,rateLimits:{fiveHour:null,sevenDay:null},ts:Date.now()}));
 const vscode=require('vscode');
 // The user has hand-picked a global title bar colour. It must survive everything.
 vscode.__store.global['workbench.colorCustomizations'] = { 'titleBar.activeBackground':'#2d2d44', 'editor.background':'#101010' };

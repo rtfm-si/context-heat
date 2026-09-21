@@ -11,7 +11,7 @@ module.exports = {
   window:{ createStatusBarItem:()=>item, createOutputChannel:()=>({appendLine:(l)=>{if(process.env.CH_VERBOSE)console.log('[out]',l);},show(){},dispose(){}}), showQuickPick:async()=>undefined, showInformationMessage:async(...a)=>{module.exports.__msgs.push(a[0]);return module.exports.__answer;} },
   commands:{ registerCommand:(id,fn)=>({dispose(){},id,fn}) },
   workspace:{
-    workspaceFolders:[{uri:{fsPath:'/Users/si/projects/game-centre'}}],
+    workspaceFolders:[{uri:{fsPath:'/repos/beta'}}],
     onDidChangeConfiguration:()=>({dispose(){}}),
     getConfiguration:(section)=>({
       get:(k,d)=>{ const sid=section+'.'+k;

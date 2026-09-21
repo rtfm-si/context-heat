@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // F5 opens a second VS Code window running this working copy.
+      //
+      // It opens this folder too, deliberately: the extension only shows a
+      // temperature when a Claude session's cwd matches the window's workspace
+      // folder, so an empty dev host would sit there saying "no session found"
+      // and tell you nothing.
+      "name": "Run Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}", "${workspaceFolder}"],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "${defaultBuildTask}"
+    },
+    {
+      // The logic tests are plain node against a stubbed vscode module, so they
+      // debug without an Extension Host at all.
+      "name": "Debug logic tests",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/test/logic.test.js",
+      "preLaunchTask": "npm: compile",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Debug scope tests",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/test/scope.test.js",
+      "preLaunchTask": "npm: compile",
+      "console": "integratedTerminal"
+    }
+  ]
+}

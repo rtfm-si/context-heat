@@ -27,12 +27,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/si/context-heat"
+    "url": "git+https://github.com/rtfm-si/context-heat.git"
   },
   "bugs": {
-    "url": "https://github.com/si/context-heat/issues"
+    "url": "https://github.com/rtfm-si/context-heat/issues"
   },
-  "homepage": "https://github.com/si/context-heat#readme",
+  "homepage": "https://github.com/rtfm-si/context-heat#readme",
   "engines": {
     "vscode": "^1.90.0"
   },

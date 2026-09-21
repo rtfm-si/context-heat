@@ -49,13 +49,13 @@ t('out-of-range clamped', normalizeThresholds({ meltdown: 500 }, ['meltdown']).m
 // --- session selection ---
 const mk = (id, cwd, pct, ts) => ({ sessionId: id, cwd, currentDir: cwd, usedPercentage: pct, contextWindowSize: 1e6, model: null, sessionName: null, exceeds200k: false, rateLimits:{fiveHour:null,sevenDay:null}, ts });
 const now = Date.now();
-const rs = [ mk('a','/Users/si/projects/game-centre',56,now), mk('b','/Users/si/projects/context-burn',7,now-5000), mk('c','/Users/si/projects/merchant-stack',47,now-2000) ];
-t('picks own folder, not newest', selectForWorkspace(rs, ['/Users/si/projects/context-burn']).sessionId === 'b');
-t('subfolder matches', selectForWorkspace(rs, ['/Users/si/projects/context-burn/src']).sessionId === 'b');
-t('unrelated folder -> null', selectForWorkspace(rs, ['/Users/si/projects/nowhere']) === null);
+const rs = [ mk('a','/repos/beta',56,now), mk('b','/repos/alpha',7,now-5000), mk('c','/repos/gamma',47,now-2000) ];
+t('picks own folder, not newest', selectForWorkspace(rs, ['/repos/alpha']).sessionId === 'b');
+t('subfolder matches', selectForWorkspace(rs, ['/repos/alpha/src']).sessionId === 'b');
+t('unrelated folder -> null', selectForWorkspace(rs, ['/repos/nowhere']) === null);
 t('no folders -> newest', selectForWorkspace(rs, []).sessionId === 'a');
 t('empty -> null', selectForWorkspace([], ['/x']) === null);
-t('exact beats parent', selectForWorkspace([mk('parent','/Users/si/projects',90,now), mk('exact','/Users/si/projects/context-burn',10,now-1)], ['/Users/si/projects/context-burn']).sessionId === 'exact');
+t('exact beats parent', selectForWorkspace([mk('parent','/repos',90,now), mk('exact','/repos/alpha',10,now-1)], ['/repos/alpha']).sessionId === 'exact');
 
 // --- robustness ---
 fs.rmSync('/tmp/ch-sel',{recursive:true,force:true}); fs.mkdirSync('/tmp/ch-sel',{recursive:true});
